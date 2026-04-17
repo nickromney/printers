@@ -1,0 +1,27 @@
+command=repair
+queue=HP_Test_Series__ABC123_
+host=192.0.2.25
+ipv4=192.0.2.25
+print_engine_health=healthy
+cloud_health=disabled
+mac_queue_health=healthy
+status_category=ready
+product_error_log=empty
+mispick_events=66
+eprint_registration_state=unregistered
+eprint_signaling_state=disconnected
+repair_action=soft-reset-pjl
+repair_action=experimental-clear-jobs
+experimental_clear_jobs_post_action_status_category=ready
+experimental_clear_jobs_post_action_printer_state=idle
+experimental_clear_jobs_post_action_printer_state_reasons=none
+experimental_clear_jobs_post_action_queued_job_count=0
+experimental_clear_jobs_post_action_joblist_summary=job-url=/Jobs/JobList/10 category=Print state=Completed update=239-42
+repair_action=cancel-connecting
+cancel_connecting_http_code=200
+pre_action_product_status_category=subscribedPagesLow
+post_action_product_status_category=ready
+pre_action_eprint_registration_state=registered
+post_action_eprint_registration_state=unregistered
+pre_action_consumable_subscription_status=connectNowWarning
+post_action_consumable_subscription_status=active

@@ -1,0 +1,12 @@
+command=diagnose
+queue=HP_Test_Series__ABC123_
+host=192.0.2.25
+ipv4=192.0.2.25
+print_engine_health=degraded
+cloud_health=degraded
+mac_queue_health=healthy
+status_category=ready
+product_error_log=paper jam & cover open
+mispick_events=66
+eprint_registration_state=registered
+eprint_signaling_state=disconnected

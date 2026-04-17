@@ -4,7 +4,7 @@ Manufacturer-scoped printer tooling and notes.
 
 ## Layout
 
-- [`hp/`](./hp/) contains the current HP diagnostics script, documentation, and tests.
+- [`hp/`](./hp/) contains the current HP diagnostics and repair wrappers, shared implementation, documentation, and tests.
 - `brother/` and `canon/` are reserved for future manufacturer-specific tooling.
 
 ## Current Support

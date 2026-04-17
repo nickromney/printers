@@ -5,6 +5,7 @@ setup_mock_printer_env() {
   helper_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
   export SCRIPT_UNDER_TEST="${helper_dir%/tests}/diagnostics.sh"
+  export REPAIR_SCRIPT_UNDER_TEST="${helper_dir%/tests}/repair.sh"
   TEST_ROOT="$(mktemp -d "${BATS_TEST_TMPDIR}/mock-printer.XXXXXX")"
   export TEST_ROOT
   export MOCK_BIN="${TEST_ROOT}/bin"
@@ -29,6 +30,8 @@ setup_mock_printer_env() {
   export CUPS_ERROR_LOG_PATH="${MOCK_STATE_DIR}/cups-error.log"
 
   : > "$CUPS_ERROR_LOG_PATH"
+  printf 'clean\n' > "${MOCK_STATE_DIR}/product_logs_mode"
+  printf 'completed\n' > "${MOCK_STATE_DIR}/job_list_mode"
   printf 'registered\n' > "${MOCK_STATE_DIR}/eprint_mode"
   printf 'warning\n' > "${MOCK_STATE_DIR}/status_mode"
   printf 'connectNowWarning\n' > "${MOCK_STATE_DIR}/subscription_status"
@@ -39,6 +42,7 @@ setup_mock_printer_env() {
   create_mock_snmpget
   create_mock_snmpwalk
   create_mock_sleep
+  create_mock_nc
   create_mock_curl
 }
 
@@ -47,6 +51,20 @@ assert_output_contains() {
   local needle="$2"
 
   [[ "$haystack" == *"$needle"* ]]
+}
+
+assert_output_not_contains() {
+  local haystack="$1"
+  local needle="$2"
+
+  [[ "$haystack" != *"$needle"* ]]
+}
+
+assert_output_equals_file() {
+  local haystack="$1"
+  local file="$2"
+
+  diff -u "$file" <(printf '%s\n' "$haystack")
 }
 
 assert_file_contains() {
@@ -61,6 +79,12 @@ assert_file_not_contains() {
   local needle="$2"
 
   ! grep -Fq -- "$needle" "$file"
+}
+
+assert_file_not_exists() {
+  local file="$1"
+
+  [ ! -e "$file" ]
 }
 
 create_mock_lpstat() {
@@ -204,6 +228,19 @@ EOF
   chmod +x "${MOCK_BIN}/sleep"
 }
 
+create_mock_nc() {
+  cat > "${MOCK_BIN}/nc" <<'EOF'
+#!/usr/bin/env bash
+set -eu
+
+state_dir="${MOCK_PRINTER_STATE_DIR:?}"
+printf '%s\n' "$*" > "${state_dir}/last_nc_args.txt"
+cat > "${state_dir}/last_nc_payload.txt"
+exit 0
+EOF
+  chmod +x "${MOCK_BIN}/nc"
+}
+
 create_mock_curl() {
   cat > "${MOCK_BIN}/curl" <<'EOF'
 #!/usr/bin/env bash
@@ -325,6 +362,22 @@ XML
 }
 
 render_product_logs() {
+  product_logs_mode="$(cat "${state_dir}/product_logs_mode")"
+  if [ "$product_logs_mode" = "single-line-error" ]; then
+    cat <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<pldyn:ProductLogsDyn xmlns:pldyn="http://www.hp.com/schemas/imaging/con/ledm/productlogsdyn/2009/03/31" xmlns:dd="http://www.hp.com/schemas/imaging/con/dictionaries/1.0/">
+  <pldyn:Event>
+    <dd:SequenceNumber>131585</dd:SequenceNumber>
+    <dd:EventOccurrences>1</dd:EventOccurrences>
+    <dd:EventCode>74899</dd:EventCode>
+  </pldyn:Event>
+  <pldyn:ErrorLog>paper jam &amp; cover open</pldyn:ErrorLog>
+</pldyn:ProductLogsDyn>
+XML
+    return
+  fi
+
   cat <<'XML'
 <?xml version="1.0" encoding="UTF-8"?>
 <pldyn:ProductLogsDyn xmlns:pldyn="http://www.hp.com/schemas/imaging/con/ledm/productlogsdyn/2009/03/31" xmlns:dd="http://www.hp.com/schemas/imaging/con/dictionaries/1.0/">
@@ -523,6 +576,22 @@ XML
 }
 
 render_job_list() {
+  job_list_mode="$(cat "${state_dir}/job_list_mode")"
+  if [ "$job_list_mode" = "processing" ]; then
+    cat <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<j:JobList xmlns:j="http://www.hp.com/schemas/imaging/con/ledm/jobs/2009/04/30">
+  <j:Job>
+    <j:JobUrl>/Jobs/JobList/10</j:JobUrl>
+    <j:JobCategory>Print</j:JobCategory>
+    <j:JobState>Processing</j:JobState>
+    <j:JobStateUpdate>239-99</j:JobStateUpdate>
+  </j:Job>
+</j:JobList>
+XML
+    return
+  fi
+
   cat <<'XML'
 <?xml version="1.0" encoding="UTF-8"?>
 <j:JobList xmlns:j="http://www.hp.com/schemas/imaging/con/ledm/jobs/2009/04/30">
@@ -541,6 +610,18 @@ if [ "$method" = "PUT" ] && [ "$path" = "/ePrint/ePrintConfigDyn.xml" ]; then
   printf 'disabled\n' > "${state_dir}/eprint_mode"
   printf 'ready\n' > "${state_dir}/status_mode"
   printf 'active\n' > "${state_dir}/subscription_status"
+  if [ -n "$output_file" ]; then
+    : > "$output_file"
+  fi
+  if [ -n "$write_out" ]; then
+    printf '200'
+  fi
+  exit 0
+fi
+
+if [ "$method" = "PUT" ] && [ "${path#/Jobs/JobList/}" != "$path" ]; then
+  printf '%s' "$data" > "${state_dir}/last_job_cancel_payload.xml"
+  printf 'completed\n' > "${state_dir}/job_list_mode"
   if [ -n "$output_file" ]; then
     : > "$output_file"
   fi
