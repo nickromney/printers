@@ -1,6 +1,6 @@
 # Diagnostic Approach
 
-This document explains the high-level workflow behind the diagnostic script. It is the operational reasoning for the tool, not a verbatim internal chain-of-thought dump.
+This document explains the high-level workflow behind the diagnostic and repair tools. It is the operational reasoning for the tool, not a verbatim internal chain-of-thought dump.
 
 ## Goal
 
@@ -78,7 +78,7 @@ flowchart TD
     E --> F["Re-check ProductStatusDyn for ready with an empty alert table"]
 ```
 
-The helper now includes a guarded `--cancel-connecting` action for that case. It only sends writable fields to `/ePrint/ePrintConfigDyn.xml`:
+The repair script includes a guarded `--execute`/`--fix` path for the full repair recipe. When the printer is stuck on an HP Connected or Instant Ink panel state, the recipe may send writable fields to `/ePrint/ePrintConfigDyn.xml`:
 
 - `EmailService=disabled`
 - `SipService=disabled`
