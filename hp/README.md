@@ -4,7 +4,12 @@ This directory contains Bash-based diagnostic and repair tools for HP printers t
 
 It is an unofficial compatibility tool for printers you own or administer. It is not affiliated with, endorsed by, or sponsored by HP. "HP" is used here only to identify the supported device family.
 
-The main scripts are [`diagnostics.sh`](./diagnostics.sh) and [`repair.sh`](./repair.sh). They share the same layered checks but keep read-only inspection and repair actions separate:
+The main scripts are [`diagnostics.sh`](./diagnostics.sh), [`repair.sh`](./repair.sh), [`lucky.sh`](./lucky.sh), and [`prove-print.sh`](./prove-print.sh). The first two cover inspection and repair; the latter two cover one-command troubleshooting and ink proof-printing:
+
+- **[`lucky.sh`](./lucky.sh)** — "I'm feeling lucky." Runs diagnostics, applies the repair recipe if a problem is detected, then sends a colour test page to prove the printer is working. The friendliest entry point for a non-technical user.
+- **[`prove-print.sh`](./prove-print.sh)** — Sends a PostScript test page with one line in black ink and one line in colour (blue) ink. Use this to answer "has my colour cartridge run out?" with physical evidence on paper.
+
+The diagnostic and repair scripts share the same layered checks but keep read-only inspection and repair actions separate:
 
 - Local macOS and CUPS state
 - IPP printer attributes
@@ -15,6 +20,26 @@ The main scripts are [`diagnostics.sh`](./diagnostics.sh) and [`repair.sh`](./re
 Both wrappers delegate to the shared implementation in [`lib/printer-common.sh`](./lib/printer-common.sh), which keeps the transport and parsing plumbing in one place.
 
 ## Usage
+
+### Not working? Just run this
+
+```bash
+chmod +x ./hp/lucky.sh
+./hp/lucky.sh
+```
+
+`lucky.sh` auto-detects the printer, repairs it if needed, then prints a test page with black and colour ink. No other flags required.
+
+### Prove the colour cartridge is working
+
+```bash
+chmod +x ./hp/prove-print.sh
+./hp/prove-print.sh
+```
+
+Sends a PostScript page with one black line and one blue line. If the blue line doesn't print, the colour cartridge needs replacing.
+
+### Advanced usage
 
 Run these from the repository root:
 
@@ -71,6 +96,6 @@ When `repair.sh` runs the full repair recipe, it may send a `PUT` to `/ePrint/eP
 ## Verification
 
 ```bash
-shellcheck ./hp/diagnostics.sh ./hp/repair.sh ./hp/lib/printer-common.sh ./hp/tests/test_helper.bash
+shellcheck ./hp/diagnostics.sh ./hp/repair.sh ./hp/lucky.sh ./hp/prove-print.sh ./hp/lib/printer-common.sh ./hp/tests/test_helper.bash
 bats ./hp/tests
 ```

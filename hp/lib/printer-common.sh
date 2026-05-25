@@ -666,6 +666,7 @@ collect_plain_summary_inputs() {
     PLAIN_CONSUMABLE_XML="$(fetch_url "/DevMgmt/ConsumableConfigDyn.xml" || true)"
     PLAIN_EPRINT_CONFIG_XML="$(fetch_url "/ePrint/ePrintConfigDyn.xml" || true)"
     PLAIN_CONSUMABLE_SUBSCRIPTION_INFO_XML="$(fetch_url "/ConsumableSubscription/Info" || true)"
+    PLAIN_HP_JOB_LIST_XML="$(fetch_url "/Jobs/JobList" || true)"
   fi
 
   STATUS_CATEGORY="$(extract_tag_value "${PLAIN_PRODUCT_STATUS_XML:-}" "pscat:StatusCategory")"
@@ -681,6 +682,17 @@ collect_plain_summary_inputs() {
   CONSUMABLE_SUBSCRIPTION_STATUS="$(extract_tag_value "${PLAIN_CONSUMABLE_SUBSCRIPTION_INFO_XML:-}" "cs:Status")"
   SUBSCRIPTION_CONSUMABLE_COUNT="$(printf '%s\n' "${PLAIN_CONSUMABLE_XML:-}" | awk '/<dd:IsSubscription>true<\/dd:IsSubscription>/ { count++ } END { print count + 0 }')"
 
+  # Count HP-side processing jobs for the plain stuck detection
+  PLAIN_HP_PROCESSING_JOB_COUNT="$(printf '%s\n' "${PLAIN_HP_JOB_LIST_XML:-}" | awk '/<j:JobState>Processing<\/j:JobState>/ { count++ } END { print count + 0 }')"
+
+  # Count IPP-side processing jobs if ipptool is available
+  PLAIN_IPP_PROCESSING_JOB_COUNT=0
+  if [ -n "$ENDPOINT_HOST" ] && have ipptool; then
+    PLAIN_IPP_JOBS_RAW="$(ipptool -tv "ipp://$ENDPOINT_HOST/ipp/print" /usr/share/cups/ipptool/get-jobs.test 2>&1 || true)"
+    PLAIN_IPP_JOBS_SUMMARY="$(extract_jobs_summary "$PLAIN_IPP_JOBS_RAW")"
+    PLAIN_IPP_PROCESSING_JOB_COUNT="$(count_processing_jobs_summary_lines "$PLAIN_IPP_JOBS_SUMMARY")"
+  fi
+
   if [ "${EPRINT_EMAIL_SERVICE:-}" = "disabled" ] && [ "${EPRINT_SIP_SERVICE:-}" = "disabled" ] && [ "${EPRINT_MOBILE_APPS_SERVICE:-}" = "disabled" ] && [ "${EPRINT_REGISTRATION_STATE:-}" = "unregistered" ]; then
     CLOUD_HEALTH="disabled"
   elif [ "$SUBSCRIPTION_CONSUMABLE_COUNT" -gt 0 ]; then
@@ -695,7 +707,11 @@ collect_plain_summary_inputs() {
     CLOUD_HEALTH="unknown"
   fi
 
-  if [ -n "${STATUS_CATEGORY:-}" ] && [ "$STATUS_CATEGORY" != "ready" ] && [ "$STATUS_CATEGORY" != "inPowerSave" ]; then
+  # Mirror the prose-path stuck detection in plain mode:
+  # HP has a processing job but IPP reports no processing jobs → job is trapped.
+  if [ "${PLAIN_HP_PROCESSING_JOB_COUNT:-0}" -gt 0 ] && [ "${PLAIN_IPP_PROCESSING_JOB_COUNT:-0}" -eq 0 ]; then
+    PRINT_ENGINE_HEALTH="stuck"
+  elif [ -n "${STATUS_CATEGORY:-}" ] && [ "$STATUS_CATEGORY" != "ready" ] && [ "$STATUS_CATEGORY" != "inPowerSave" ]; then
     PRINT_ENGINE_HEALTH="active"
   elif [ -n "${PRODUCT_ERROR_LOG:-}" ]; then
     PRINT_ENGINE_HEALTH="degraded"
