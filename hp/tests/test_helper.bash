@@ -6,6 +6,8 @@ setup_mock_printer_env() {
 
   export SCRIPT_UNDER_TEST="${helper_dir%/tests}/diagnostics.sh"
   export REPAIR_SCRIPT_UNDER_TEST="${helper_dir%/tests}/repair.sh"
+  export PROVE_PRINT_UNDER_TEST="${helper_dir%/tests}/prove-print.sh"
+  export LUCKY_UNDER_TEST="${helper_dir%/tests}/lucky.sh"
   TEST_ROOT="$(mktemp -d "${BATS_TEST_TMPDIR}/mock-printer.XXXXXX")"
   export TEST_ROOT
   export MOCK_BIN="${TEST_ROOT}/bin"
@@ -44,6 +46,7 @@ setup_mock_printer_env() {
   create_mock_sleep
   create_mock_nc
   create_mock_curl
+  create_mock_lp
 }
 
 assert_output_contains() {
@@ -239,6 +242,43 @@ cat > "${state_dir}/last_nc_payload.txt"
 exit 0
 EOF
   chmod +x "${MOCK_BIN}/nc"
+}
+
+create_mock_lp() {
+  cat > "${MOCK_BIN}/lp" <<'EOF'
+#!/usr/bin/env bash
+set -eu
+
+state_dir="${MOCK_PRINTER_STATE_DIR:?}"
+dest=""
+input_file=""
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -d)
+      shift
+      dest="$1"
+      shift
+      ;;
+    -*)
+      shift
+      ;;
+    *)
+      input_file="$1"
+      shift
+      ;;
+  esac
+done
+
+if [ -n "$input_file" ] && [ -f "$input_file" ]; then
+  cp "$input_file" "${state_dir}/last_lp_file.ps"
+fi
+
+printf '%s\n' "$dest" > "${state_dir}/last_lp_dest.txt"
+printf 'request id is %s-1 (1 file(s))\n' "${dest:-unknown}"
+exit 0
+EOF
+  chmod +x "${MOCK_BIN}/lp"
 }
 
 create_mock_curl() {
