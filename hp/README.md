@@ -17,7 +17,7 @@ The diagnostic and repair scripts share the same layered checks but keep read-on
 - HP service namespaces for firmware update, ePrint, and event history
 - SNMP status and supply data
 
-Both wrappers delegate to the shared implementation in [`lib/printer-common.sh`](./lib/printer-common.sh), which keeps the transport and parsing plumbing in one place.
+Both wrappers delegate to the shared implementation in [`lib/printer-common.sh`](./lib/printer-common.sh), which keeps the transport and parsing plumbing in one place. Queue and host discovery helpers shared with `prove-print.sh` live in [`lib/printer-discovery.sh`](./lib/printer-discovery.sh).
 
 ## Usage
 
@@ -95,7 +95,13 @@ When `repair.sh` runs the full repair recipe, it may send a `PUT` to `/ePrint/eP
 
 ## Verification
 
+Run these from the repository root:
+
 ```bash
-shellcheck ./hp/diagnostics.sh ./hp/repair.sh ./hp/lucky.sh ./hp/prove-print.sh ./hp/lib/printer-common.sh ./hp/tests/test_helper.bash
-bats ./hp/tests
+make lint        # shellcheck
+make test        # bats suites
+make complexity  # fail if any bash function exceeds cyclomatic complexity 10
+make mutation-execute SCRIPT=hp/lib/printer-common.sh  # mutation testing against the bats suites
 ```
+
+The mutation and complexity runners under `scripts/` are vendored from the `platform` repository.

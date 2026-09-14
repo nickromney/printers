@@ -152,3 +152,13 @@ setup() {
   assert_file_contains "${MOCK_OUTPUT_DIR}/56-cancel-connecting-post-eprint-config.xml" "<ep:RegistrationState>unregistered</ep:RegistrationState>"
   assert_file_contains "${MOCK_OUTPUT_DIR}/57-cancel-connecting-post-product-status.xml" "<pscat:StatusCategory>ready</pscat:StatusCategory>"
 }
+
+@test "diagnose takes the host from an ipp:// device URI" {
+  set_mock_device_uri "ipp://hp-ipp-printer.local:631/ipp/print"
+
+  run "$SCRIPT_UNDER_TEST" --plain
+
+  [ "$status" -eq 0 ]
+  assert_output_contains "$output" "host=hp-ipp-printer.local"
+  assert_output_contains "$output" "ipv4=192.0.2.25"
+}

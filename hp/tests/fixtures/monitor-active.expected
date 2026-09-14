@@ -1,0 +1,17 @@
+
+Sampling every 0s for up to 3 samples.
+[<timestamp>] cups="printer HP_Test_Series__ABC123_ is idle. enabled since Sun Mar 22 21:17:15 2026" ipp-state=idle ipp-reasons=none queued=0
+  hp-status: subscribedPagesLow
+  hp-job: job-url=/Jobs/JobList/10 category=Print state=Processing update=239-99
+  hp-error-first-line: paper jam & cover open
+  raw-sample-dir: <root>/output/monitor/<sample>
+[<timestamp>] cups="printer HP_Test_Series__ABC123_ is idle. enabled since Sun Mar 22 21:17:15 2026" ipp-state=idle ipp-reasons=none queued=0
+  hp-status: subscribedPagesLow
+  hp-job: job-url=/Jobs/JobList/10 category=Print state=Processing update=239-99
+  hp-error-first-line: paper jam & cover open
+  raw-sample-dir: <root>/output/monitor/<sample>
+[<timestamp>] cups="printer HP_Test_Series__ABC123_ is idle. enabled since Sun Mar 22 21:17:15 2026" ipp-state=idle ipp-reasons=none queued=0
+  hp-status: subscribedPagesLow
+  hp-job: job-url=/Jobs/JobList/10 category=Print state=Processing update=239-99
+  hp-error-first-line: paper jam & cover open
+  raw-sample-dir: <root>/output/monitor/<sample>

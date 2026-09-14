@@ -1,0 +1,129 @@
+
+== Quick Summary ==
+Queue: HP_Test_Series__ABC123_
+Description: HP Test Series [ABC123]
+Device URI: dnssd://HP%20Test%20Series%20%5BABC123%5D._ipp._tcp.local./?uuid=11111111-2222-3333-4444-555555555555
+Bonjour service: HP Test Series [ABC123]
+Host: hp-test-printer.local
+IPv4: 192.0.2.25
+
+== CUPS ==
+printer HP_Test_Series__ABC123_ is idle.  enabled since Sun Mar 22 21:17:15 2026
+system default destination: HP_Test_Series__ABC123_
+device for HP_Test_Series__ABC123_: dnssd://HP%20Test%20Series%20%5BABC123%5D._ipp._tcp.local./?uuid=11111111-2222-3333-4444-555555555555
+
+printer HP_Test_Series__ABC123_ is idle.  enabled since Sun Mar 22 21:17:15 2026
+	Form mounted:
+	Content types: any
+	Printer types: unknown
+	Description: HP Test Series [ABC123]
+	Alerts: none
+	Finished page 1
+	Location:
+	Connection: direct
+	Interface: /private/etc/cups/ppd/HP_Test_Series__ABC123_.ppd
+	On fault: no alert
+	After fault: continue
+
+Recent jobs (last 24 hours): none found
+
+
+Recent CUPS errors/warnings (last 24 hours): none found
+
+
+== IPP ==
+printer-state: idle
+printer-state-reasons: none
+printer-is-accepting-jobs: true
+queued-job-count: 0
+printer-up-time (seconds): 1234
+printer-alert-description: ready
+printer-alert: printerReadyToPrint
+marker-names: tri-color ink,black ink
+marker-levels: 30,70
+
+== HP Embedded Web Server ==
+DiscoveryTree DevMgmt endpoints:
+/DevMgmt/ProductStatusDyn.xml
+/DevMgmt/ProductLogsDyn.xml
+/DevMgmt/ProductUsageDyn.xml
+/DevMgmt/ConsumableConfigDyn.xml
+/DevMgmt/ProductConfigDyn.xml
+
+ProductStatusDyn status-category: subscribedPagesLow
+ProductStatusDyn string-id: 65737
+
+ProductLogsDyn event codes:
+event-code=74899 sequence=131585 occurrences=1
+
+ProductLogsDyn hidden error log: empty
+
+ProductUsageDyn total-impressions: 12981
+ProductUsageDyn duplex-sheets: 1236
+ProductUsageDyn jam-events: 0
+ProductUsageDyn mispick-events: 66
+ProductUsageDyn wireless-network-impressions: 8450
+
+ConsumableConfigDyn summary:
+CMY: 40% (ok, newGenuineHP)
+K: 40% (ok, newGenuineHP)
+Consumable subscription-level: 1
+Consumables marked as subscription cartridges: 2
+
+== HP Services ==
+ProductConfigDyn firmware-revision: MKM1FN2025AR
+ProductConfigDyn firmware-date: 2020-06-15
+ProductConfigDyn service-id: 24149
+ProductConfigDyn device-timestamp: <timestamp>
+ProductConfigDyn power-save: on
+ProductStatusDyn alert-table-modification-number: 3
+
+FirmwareUpdate state: idle
+FirmwareUpdate automatic-check: disabled
+FirmwareUpdate automatic-update: enabled
+
+ePrint email-service: enabled
+ePrint sip-service: enabled
+ePrint mobile-apps-service: enabled
+ePrint registration-state: registered
+ePrint xmpp-connection-state: connected
+ePrint signaling-connection-state: disconnected
+ePrint claim-status: idle
+ePrint connection-state-reason: none returned
+
+ConsumableSubscription status: connectNowWarning
+ConsumableSubscription last-received-date: 2026-03-22
+ConsumableSubscription last-connection-date: 2026-03-22
+
+EventMgmt event table:
+event=JobEvent aging-stamp=239-48
+
+Jobs/JobList summary:
+job-url=/Jobs/JobList/10 category=Print state=Completed update=239-42
+
+NetApps domain-name: hp-test-printer.local.
+NetApps proxy-uri: none
+NetApps proxy-port: 0
+Security failsafe-state: off
+
+== Health Summary ==
+Print engine: active (printer status is subscribedPagesLow)
+Cloud/Instant Ink: degraded (subscription cartridges installed, but HP cloud signaling is not fully connected)
+Mac queue: healthy (CUPS queue is enabled and idle)
+
+== SNMP ==
+HOST-RESOURCES-MIB::hrPrinterStatus.1 = INTEGER: idle(3)
+HOST-RESOURCES-MIB::hrPrinterDetectedErrorState.1 = Hex-STRING: 00
+
+SNMP supply summary:
+black ink cartridge: 35%
+tri-color ink cartridge: 44%
+
+== Interpretation ==
+HP ProductStatusDyn is not reporting ready: subscribedPagesLow
+The printer has a lifetime history of 66 paper mispick events.
+ProductStatusDyn reports alert-table changes with modification number 3.
+ePrint signaling is not connected: disconnected.
+Instant Ink subscription cartridges are installed, but HP cloud signaling is not fully connected.
+EventMgmt shows the most recent device-side event categories above.
+If print jobs still sit in 'printing' for a long time while the checks above remain healthy, the next suspects are network delivery, Bonjour name resolution, or the printer taking a long time to rasterize a specific job.
