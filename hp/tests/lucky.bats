@@ -77,3 +77,63 @@ setup() {
   assert_file_contains "${MOCK_STATE_DIR}/last_lp_file.ps" "black ink"
   assert_file_contains "${MOCK_STATE_DIR}/last_lp_file.ps" "colour ink"
 }
+
+@test "lucky skips repair for a healthy printer" {
+  printf 'ready\n' > "${MOCK_STATE_DIR}/status_mode"
+  printf 'disabled\n' > "${MOCK_STATE_DIR}/eprint_mode"
+
+  run "$LUCKY_UNDER_TEST"
+
+  [ "$status" -eq 0 ]
+  assert_output_contains "$output" "Everything looks OK."
+  assert_output_not_contains "$output" "Found a problem"
+  assert_file_not_exists "${MOCK_STATE_DIR}/last_nc_args.txt"
+}
+
+@test "lucky reports the resolved network address and pins later calls to it" {
+  printf 'processing\n' > "${MOCK_STATE_DIR}/job_list_mode"
+
+  run "$LUCKY_UNDER_TEST"
+
+  [ "$status" -eq 0 ]
+  assert_output_contains "$output" "  Network address: 192.0.2.25"
+  assert_file_contains "${MOCK_STATE_DIR}/last_nc_args.txt" "192.0.2.25 9100"
+}
+
+@test "lucky passes an explicit host through to repair and prove-print" {
+  printf 'processing\n' > "${MOCK_STATE_DIR}/job_list_mode"
+
+  run "$LUCKY_UNDER_TEST" --host 192.0.2.99
+
+  [ "$status" -eq 0 ]
+  assert_file_contains "${MOCK_STATE_DIR}/last_nc_args.txt" "192.0.2.99 9100"
+  [ "$(tail -n 1 "${MOCK_STATE_DIR}/ipp_uris.txt")" = "ipp://192.0.2.99/ipp/print" ]
+}
+
+@test "lucky runs repair when the Mac queue is disabled" {
+  printf 'ready\n' > "${MOCK_STATE_DIR}/status_mode"
+  sed -i.bak 's/is idle.  enabled since/disabled since/' "${MOCK_BIN}/lpstat"
+
+  run "$LUCKY_UNDER_TEST" --host 192.0.2.25
+
+  [ "$status" -eq 0 ]
+  assert_output_contains "$output" "Found a problem with the printer (healthy)"
+}
+
+@test "lucky still proves printing when repair fails" {
+  printf 'processing\n' > "${MOCK_STATE_DIR}/job_list_mode"
+  printf '#!/usr/bin/env bash\nexit 1\n' > "${MOCK_BIN}/nc"
+
+  run "$LUCKY_UNDER_TEST" --host 192.0.2.25
+
+  [ "$status" -eq 0 ]
+  assert_output_contains "$output" "Done. The printer should be ready now."
+  [ -f "${MOCK_STATE_DIR}/last_lp_file.ps" ]
+}
+
+@test "lucky rejects unknown options" {
+  run "$LUCKY_UNDER_TEST" --bogus
+
+  [ "$status" -eq 2 ]
+  assert_output_contains "$output" "ERROR: Unknown option: --bogus"
+}

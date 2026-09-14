@@ -37,6 +37,9 @@ setup_mock_printer_env() {
   printf 'registered\n' > "${MOCK_STATE_DIR}/eprint_mode"
   printf 'warning\n' > "${MOCK_STATE_DIR}/status_mode"
   printf 'connectNowWarning\n' > "${MOCK_STATE_DIR}/subscription_status"
+  printf 'idle\n' > "${MOCK_STATE_DIR}/ipp_mode"
+  printf 'subscription\n' > "${MOCK_STATE_DIR}/consumable_mode"
+  printf 'disconnected\n' > "${MOCK_STATE_DIR}/signaling_state"
 
   create_mock_lpstat
   create_mock_dns_sd
@@ -149,7 +152,11 @@ case "${1:-}" in
     ;;
   -G)
     printf 'Timestamp A/R Flags if Hostname Address TTL\n'
-    printf '21:18:29 Add 2 3 hp-test-printer.local. 192.0.2.25 120\n'
+    case "${3:-}" in
+      hp-test-printer.local|hp-ipp-printer.local)
+        printf '21:18:29 Add 2 3 %s. 192.0.2.25 120\n' "$3"
+        ;;
+    esac
     ;;
   *)
     printf 'unexpected dns-sd args: %s\n' "$*" >&2
@@ -165,22 +172,44 @@ create_mock_ipptool() {
 #!/usr/bin/env bash
 set -eu
 
+mode="$(cat "${MOCK_PRINTER_STATE_DIR}/ipp_mode")"
+printf '%s\n' "${2:-}" >> "${MOCK_PRINTER_STATE_DIR}/ipp_uris.txt"
+reasons="none"
+uptime=1234
+queued=0
+if [ "$mode" = "spool-full" ]; then
+  reasons="spool-area-full-report"
+  uptime=600
+  queued=1
+fi
+
 case "${3:-}" in
   */get-printer-attributes.test)
     cat <<OUT
     printer-state (enum) = idle
-    printer-state-reasons (keyword) = none
+    printer-state-reasons (keyword) = $reasons
     printer-is-accepting-jobs (boolean) = true
-    queued-job-count (integer) = 0
-    printer-up-time (integer) = 1234
+    queued-job-count (integer) = $queued
+    printer-up-time (integer) = $uptime
     printer-alert-description (textWithoutLanguage) = ready
     printer-alert (textWithoutLanguage) = printerReadyToPrint
     marker-names (nameWithoutLanguage) = tri-color ink,black ink
-    marker-levels (integer) = 40,40
 OUT
+    if [ "$mode" != "no-levels" ]; then
+      printf '    marker-levels (integer) = 30,70\n'
+    fi
     ;;
   */get-jobs.test)
-    exit 0
+    if [ "$mode" = "spool-full" ]; then
+      cat <<OUT
+    job-id (integer) = 42
+    job-name (nameWithoutLanguage) = report.pdf
+    job-state (enum) = processing
+    job-state-reasons (keyword) = job-printing
+    job-impressions-completed (integer) = 1
+    job-impressions (integer) = 3
+OUT
+    fi
     ;;
   *)
     printf 'unexpected ipptool args: %s\n' "$*" >&2
@@ -226,7 +255,9 @@ if [ "${1:-0}" = "0" ]; then
   exit 0
 fi
 
-/bin/sleep 0.01
+# run_for_seconds counts one sleep per second of budget. Too short a nap turns
+# the 4s dns-sd timeout into a few milliseconds and discovery flakes under load.
+/bin/sleep 0.25
 EOF
   chmod +x "${MOCK_BIN}/sleep"
 }
@@ -270,6 +301,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+printf '%s\n' "$input_file" > "${state_dir}/last_lp_input_path.txt"
 if [ -n "$input_file" ] && [ -f "$input_file" ]; then
   cp "$input_file" "${state_dir}/last_lp_file.ps"
 fi
@@ -444,7 +476,11 @@ XML
 }
 
 render_consumable_config() {
-  cat <<'XML'
+  subscription="true"
+  if [ "$(cat "${state_dir}/consumable_mode")" = "plain" ]; then
+    subscription="false"
+  fi
+  cat <<XML
 <?xml version="1.0" encoding="UTF-8"?>
 <ccdyn:ConsumableConfigDyn xmlns:ccdyn="http://www.hp.com/schemas/imaging/con/ledm/consumableconfigdyn/2007/11/19" xmlns:dd="http://www.hp.com/schemas/imaging/con/dictionaries/1.0/">
   <ccdyn:ConsumableInfo>
@@ -452,14 +488,14 @@ render_consumable_config() {
     <dd:ConsumablePercentageLevelRemaining>40</dd:ConsumablePercentageLevelRemaining>
     <dd:ConsumableState>ok</dd:ConsumableState>
     <dd:MeasuredQuantityState>newGenuineHP</dd:MeasuredQuantityState>
-    <dd:IsSubscription>true</dd:IsSubscription>
+    <dd:IsSubscription>${subscription}</dd:IsSubscription>
   </ccdyn:ConsumableInfo>
   <ccdyn:ConsumableInfo>
     <dd:ConsumableLabelCode>K</dd:ConsumableLabelCode>
     <dd:ConsumablePercentageLevelRemaining>40</dd:ConsumablePercentageLevelRemaining>
     <dd:ConsumableState>ok</dd:ConsumableState>
     <dd:MeasuredQuantityState>newGenuineHP</dd:MeasuredQuantityState>
-    <dd:IsSubscription>true</dd:IsSubscription>
+    <dd:IsSubscription>${subscription}</dd:IsSubscription>
   </ccdyn:ConsumableInfo>
   <ccdyn:MarkingAgentSubscriptionLevel>1</ccdyn:MarkingAgentSubscriptionLevel>
 </ccdyn:ConsumableConfigDyn>
@@ -556,7 +592,7 @@ render_eprint_config() {
 </ep:ePrintConfigDyn>
 XML
   else
-    cat <<'XML'
+    cat <<XML
 <?xml version="1.0" encoding="UTF-8"?>
 <ep:ePrintConfigDyn xmlns:ep="http://www.hp.com/schemas/imaging/con/eprint/2010/04/30" xmlns:dd="http://www.hp.com/schemas/imaging/con/dictionaries/1.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <dd:Version>
@@ -573,7 +609,7 @@ XML
   <ep:PrinterID>xik6f0nisp6c-cm-cez4cg</ep:PrinterID>
   <ep:BeaconState>enabled</ep:BeaconState>
   <dd:DeviceWebServicesURI>#hId-pgWebServicesSetup</dd:DeviceWebServicesURI>
-  <ep:SignalingConnectionState>disconnected</ep:SignalingConnectionState>
+  <ep:SignalingConnectionState>$(cat "${state_dir}/signaling_state")</ep:SignalingConnectionState>
 </ep:ePrintConfigDyn>
 XML
   fi
@@ -617,6 +653,10 @@ XML
 
 render_job_list() {
   job_list_mode="$(cat "${state_dir}/job_list_mode")"
+  if [ "$job_list_mode" = "empty" ]; then
+    printf '<?xml version="1.0" encoding="UTF-8"?>\n<j:JobList xmlns:j="http://www.hp.com/schemas/imaging/con/ledm/jobs/2009/04/30">\n</j:JobList>\n'
+    return
+  fi
   if [ "$job_list_mode" = "processing" ]; then
     cat <<'XML'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -738,4 +778,25 @@ if [ -z "$write_out" ]; then
 fi
 EOF
   chmod +x "${MOCK_BIN}/curl"
+}
+
+# Replace run-specific timestamps and temp paths so prose output can be golden.
+scrub_output() {
+  printf '%s\n' "$1" | sed -E \
+    -e 's/[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9:]+([+-][0-9]{4}| [A-Z]+)?/<timestamp>/g' \
+    -e 's/[0-9]{3}-[0-9]{8}-[0-9]{6}/<sample>/g' \
+    -e "s#${TEST_ROOT}#<root>#g"
+}
+
+assert_scrubbed_output_equals_file() {
+  diff -u "$2" <(scrub_output "$1")
+}
+
+# Point the default queue at DEVICE_URI instead of the Bonjour URI.
+set_mock_device_uri() {
+  sed -i.bak "s#dnssd://HP%20Test%20Series%20%5BABC123%5D._ipp._tcp.local./?uuid=11111111-2222-3333-4444-555555555555#$1#" "${MOCK_BIN}/lpstat"
+}
+
+set_mock_state() {
+  printf '%s\n' "$2" > "${MOCK_STATE_DIR}/$1"
 }

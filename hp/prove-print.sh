@@ -8,11 +8,13 @@
 set -u
 set -o pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=SCRIPTDIR/lib/printer-discovery.sh
+. "$script_dir/lib/printer-discovery.sh"
+
 QUEUE=""
 HOST=""
 TIMEOUT_SECONDS=4
-HELP_REQUESTED=0
-PARSE_ERROR=""
 
 usage() {
   cat <<'EOF'
@@ -37,158 +39,116 @@ Examples:
 EOF
 }
 
-die() {
-  printf 'ERROR: %s\n' "$*" >&2
-  exit 1
-}
+parse_args() {
+  local parse_error=""
 
-have() {
-  command -v "$1" >/dev/null 2>&1
-}
-
-url_decode() {
-  local data="${1//+/ }"
-  printf '%b' "${data//%/\\x}"
-}
-
-run_for_seconds() {
-  local seconds="$1"
-  shift
-  local tmp pid waited=0
-  tmp="$(mktemp)"
-  "$@" >"$tmp" 2>&1 &
-  pid="$!"
-  while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt "$seconds" ]; do
-    sleep 1
-    waited=$((waited + 1))
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --queue|--host|--timeout)
+        if [ "$#" -lt 2 ]; then
+          parse_error="$1 requires a value"
+          shift
+          continue
+        fi
+        set_option "$1" "$2"
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        parse_error="Unknown option: $1"
+        shift
+        ;;
+    esac
   done
-  if kill -0 "$pid" 2>/dev/null; then
-    kill "$pid" 2>/dev/null || true
-    wait "$pid" 2>/dev/null || true
-  else
-    wait "$pid" 2>/dev/null || true
-  fi
-  cat "$tmp"
-  rm -f "$tmp"
+
+  [ -z "$parse_error" ] || usage_error "$parse_error"
 }
 
-extract_ipptool_value() {
-  local raw="$1"
-  local key="$2"
-  printf '%s\n' "$raw" \
-    | grep -E "^[[:space:]]*$key \\(" \
-    | head -n 1 \
-    | sed 's/^[^=]*= //'
-}
-
-# Parse arguments
-while [ "$#" -gt 0 ]; do
+set_option() {
   case "$1" in
-    --queue)
-      [ "$#" -ge 2 ] || { PARSE_ERROR="--queue requires a value"; shift; continue; }
-      QUEUE="$2"; shift 2 ;;
-    --host)
-      [ "$#" -ge 2 ] || { PARSE_ERROR="--host requires a value"; shift; continue; }
-      HOST="$2"; shift 2 ;;
-    --timeout)
-      [ "$#" -ge 2 ] || { PARSE_ERROR="--timeout requires a value"; shift; continue; }
-      TIMEOUT_SECONDS="$2"; shift 2 ;;
-    -h|--help)
-      HELP_REQUESTED=1; shift ;;
-    *)
-      PARSE_ERROR="Unknown option: $1"; shift ;;
+    --queue) QUEUE="$2" ;;
+    --host) HOST="$2" ;;
+    --timeout) TIMEOUT_SECONDS="$2" ;;
   esac
-done
+}
 
-if [ "$HELP_REQUESTED" -eq 1 ]; then
-  usage
-  exit 0
-fi
+discover_host() {
+  local device_uri service_name
 
-if [ -n "$PARSE_ERROR" ]; then
-  printf 'ERROR: %s\n' "$PARSE_ERROR" >&2
-  exit 2
-fi
-
-have lpstat || die "lpstat is required"
-have lp     || die "lp is required"
-
-# Auto-detect queue
-if [ -z "$QUEUE" ]; then
-  QUEUE="$(lpstat -d 2>/dev/null | sed -n 's/^system default destination: //p' | head -n 1)"
-fi
-if [ -z "$QUEUE" ]; then
-  QUEUE="$(lpstat -p 2>/dev/null | awk '/^printer / { print $2; exit }')"
-fi
-[ -n "$QUEUE" ] || die "No CUPS printer queue found. Use --queue or connect a printer."
-
-# Resolve host via dns-sd if not given
-if [ -z "$HOST" ]; then
-  CUPS_OVERVIEW="$(lpstat -p -d -v 2>/dev/null || true)"
-  DEVICE_URI="$(printf '%s\n' "$CUPS_OVERVIEW" | awk -v q="$QUEUE" '$1 == "device" && $3 == (q ":") { sub(/^device for [^:]+: /, ""); print; exit }')"
-  SERVICE_NAME=""
-  if printf '%s' "${DEVICE_URI:-}" | grep -q '^dnssd://'; then
-    SERVICE_NAME="${DEVICE_URI#dnssd://}"
-    SERVICE_NAME="${SERVICE_NAME%%._ipp._tcp.local.*}"
-    SERVICE_NAME="$(url_decode "$SERVICE_NAME")"
+  device_uri="$(device_uri_for_queue "$(lpstat -p -d -v 2>/dev/null || true)" "$QUEUE")"
+  service_name="$(bonjour_service_name "$device_uri")"
+  if [ -n "$service_name" ] && have dns-sd; then
+    HOST="$(host_from_dnssd_lookup "$(dnssd_lookup_service "$TIMEOUT_SECONDS" "$service_name")")"
   fi
-  if [ -n "$SERVICE_NAME" ] && have dns-sd; then
-    DNS_SD_LOOKUP="$(run_for_seconds "$TIMEOUT_SECONDS" dns-sd -L "$SERVICE_NAME" _ipp._tcp local.)"
-    HOST="$(printf '%s\n' "$DNS_SD_LOOKUP" | sed -n 's/.* can be reached at \([^:]*\):.*/\1/p' | tail -n 1)"
-    HOST="${HOST%.}"
+  if [ -z "$HOST" ]; then
+    HOST="$(host_from_ipp_uri "$device_uri")"
   fi
-  if [ -z "$HOST" ] && printf '%s' "${DEVICE_URI:-}" | grep -Eq '^ipps?://'; then
-    HOST="$(printf '%s\n' "${DEVICE_URI:-}" | sed -n 's|^ipps\?://\([^/:?]*\).*|\1|p' | head -n 1)"
+}
+
+resolve_endpoint() {
+  local resolved_ip=""
+
+  if [ -n "$HOST" ] && have dns-sd; then
+    resolved_ip="$(first_ipv4 "$(run_for_seconds "$TIMEOUT_SECONDS" dns-sd -G v4v6 "$HOST")")"
   fi
-fi
+  if [ -z "$resolved_ip" ] && is_ipv4 "$HOST"; then
+    resolved_ip="$HOST"
+  fi
+  printf '%s' "${resolved_ip:-$HOST}"
+}
 
-# Resolve IPv4 if needed
-RESOLVED_IP=""
-if [ -n "$HOST" ] && have dns-sd; then
-  DNS_SD_RESOLVE="$(run_for_seconds "$TIMEOUT_SECONDS" dns-sd -G v4v6 "$HOST")"
-  RESOLVED_IP="$(printf '%s\n' "$DNS_SD_RESOLVE" | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -n 1)"
-fi
-if [ -z "$RESOLVED_IP" ] && printf '%s' "${HOST:-}" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-  RESOLVED_IP="$HOST"
-fi
-ENDPOINT_HOST="${RESOLVED_IP:-$HOST}"
+trim() {
+  printf '%s' "$1" | sed 's/^ *//; s/ *$//'
+}
 
-# Read ink levels before sending
-MARKER_NAMES=""
-MARKER_LEVELS=""
-if [ -n "$ENDPOINT_HOST" ] && have ipptool; then
-  IPP_RAW="$(ipptool -tv "ipp://$ENDPOINT_HOST/ipp/print" /usr/share/cups/ipptool/get-printer-attributes.test 2>&1 || true)"
-  MARKER_NAMES="$(extract_ipptool_value "$IPP_RAW" "marker-names")"
-  MARKER_LEVELS="$(extract_ipptool_value "$IPP_RAW" "marker-levels")"
-fi
+# "black ink", "Black Cartridge" or HP's bare "K" label; not the k in "tri-color ink".
+ink_label() {
+  if printf '%s' "$1" | grep -Eqi '(^|[^[:alpha:]])black([^[:alpha:]]|$)|^k$'; then
+    printf 'black ink'
+  else
+    printf 'colour ink'
+  fi
+}
 
-printf '\n== Colour Test Print ==\n'
-printf 'Queue: %s\n' "$QUEUE"
-if [ -n "$MARKER_NAMES" ] && [ -n "$MARKER_LEVELS" ]; then
+# Pair comma-separated IPP marker names with their levels.
+print_ink_levels() {
+  local marker_names="$1"
+  local marker_levels="$2"
+  local names levels i name
+
+  if [ -z "$marker_names" ] || [ -z "$marker_levels" ]; then
+    printf 'Ink levels: (could not read from printer)\n'
+    return 0
+  fi
+
   printf 'Ink levels before printing:\n'
-  # Pair names and levels (comma-separated) for display
-  IFS=',' read -ra names <<< "$MARKER_NAMES"
-  IFS=',' read -ra levels <<< "$MARKER_LEVELS"
+  IFS=',' read -ra names <<< "$marker_names"
+  IFS=',' read -ra levels <<< "$marker_levels"
   for i in "${!names[@]}"; do
-    name="$(printf '%s' "${names[$i]:-}" | sed 's/^ *//; s/ *$//')"
-    level="$(printf '%s' "${levels[$i]:-}" | sed 's/^ *//; s/ *$//')"
-    if [ -n "$name" ]; then
-      if printf '%s' "$name" | grep -qi 'black\|K\b'; then
-        printf '  black ink: %s%%\n' "$level"
-      else
-        printf '  colour ink: %s%%\n' "$level"
-      fi
-    fi
+    name="$(trim "${names[$i]}")"
+    [ -n "$name" ] || continue
+    printf '  %s: %s%%\n' "$(ink_label "$name")" "$(trim "${levels[$i]:-}")"
   done
-else
-  printf 'Ink levels: (could not read from printer)\n'
-fi
+}
 
-# Generate PostScript test page
-PS_FILE="$(mktemp /tmp/prove-print-XXXXXX.ps)"
-trap 'rm -f "$PS_FILE"' EXIT INT TERM
+report_ink_levels() {
+  local endpoint="$1"
+  local ipp_raw=""
 
-cat > "$PS_FILE" <<'PSEOF'
+  if [ -n "$endpoint" ] && have ipptool; then
+    ipp_raw="$(ipp_query "$endpoint" get-printer-attributes)"
+  fi
+
+  print_ink_levels \
+    "$(extract_ipptool_value "$ipp_raw" "marker-names")" \
+    "$(extract_ipptool_value "$ipp_raw" "marker-levels")"
+}
+
+write_test_page() {
+  cat > "$1" <<'PSEOF'
 %!PS-Adobe-3.0
 %%Title: Colour Ink Test Page
 %%Creator: prove-print.sh
@@ -231,15 +191,44 @@ cat > "$PS_FILE" <<'PSEOF'
 showpage
 %%EOF
 PSEOF
+}
 
-# Send to printer
-printf '\nSending test page to %s...\n' "$QUEUE"
-lp -d "$QUEUE" "$PS_FILE" 2>&1 || die "Failed to send test page to printer"
+send_test_page() {
+  local ps_file
 
-printf '\nThe test page has been sent.\n'
-printf 'Please check the printer:\n'
-printf '  - One line should be printed in BLACK ink\n'
-printf '  - One line should be printed in COLOUR (blue) ink\n'
-printf '\n'
-printf 'If the blue line did not print, your colour cartridge may need replacing.\n'
-printf 'If nothing printed, run: ./hp/repair.sh --execute\n'
+  # BSD mktemp only fills trailing X's, so the template must end in them.
+  ps_file="$(mktemp "${TMPDIR:-/tmp}/prove-print.XXXXXX")"
+  register_temp_file "$ps_file"
+  write_test_page "$ps_file"
+
+  printf '\nSending test page to %s...\n' "$QUEUE"
+  lp -d "$QUEUE" "$ps_file" 2>&1 || die "Failed to send test page to printer"
+}
+
+main() {
+  parse_args "$@"
+
+  have lpstat || die "lpstat is required"
+  have lp     || die "lp is required"
+
+  [ -n "$QUEUE" ] || QUEUE="$(detect_default_queue)"
+  [ -n "$QUEUE" ] || die "No CUPS printer queue found. Use --queue or connect a printer."
+  [ -n "$HOST" ] || discover_host
+
+  printf '\n== Colour Test Print ==\n'
+  printf 'Queue: %s\n' "$QUEUE"
+  report_ink_levels "$(resolve_endpoint)"
+
+  send_test_page
+
+  printf '\nThe test page has been sent.\n'
+  printf 'Please check the printer:\n'
+  printf '  - One line should be printed in BLACK ink\n'
+  printf '  - One line should be printed in COLOUR (blue) ink\n'
+  printf '\n'
+  printf 'If the blue line did not print, your colour cartridge may need replacing.\n'
+  printf 'If nothing printed, run: ./hp/repair.sh --execute\n'
+}
+
+trap cleanup_temp_files EXIT
+main "$@"
