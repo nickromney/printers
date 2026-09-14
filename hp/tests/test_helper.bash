@@ -177,16 +177,24 @@ printf '%s\n' "${2:-}" >> "${MOCK_PRINTER_STATE_DIR}/ipp_uris.txt"
 reasons="none"
 uptime=1234
 queued=0
-if [ "$mode" = "spool-full" ]; then
-  reasons="spool-area-full-report"
-  uptime=600
-  queued=1
-fi
+state="idle"
+case "$mode" in
+  spool-full|spool-full-no-jobs)
+    reasons="spool-area-full-report"
+    uptime=600
+    queued=1
+    ;;
+esac
+override() {
+  cat "${MOCK_PRINTER_STATE_DIR}/$1" 2>/dev/null || printf '%s' "$2"
+}
+uptime="$(override ipp_uptime "$uptime")"
+state="$(override ipp_state "$state")"
 
 case "${3:-}" in
   */get-printer-attributes.test)
     cat <<OUT
-    printer-state (enum) = idle
+    printer-state (enum) = $state
     printer-state-reasons (keyword) = $reasons
     printer-is-accepting-jobs (boolean) = true
     queued-job-count (integer) = $queued
@@ -463,13 +471,14 @@ XML
 }
 
 render_product_usage() {
-  cat <<'XML'
+  mispicks="$(cat "${state_dir}/mispick_events" 2>/dev/null || printf 66)"
+  cat <<XML
 <?xml version="1.0" encoding="UTF-8"?>
 <usage:ProductUsageDyn xmlns:usage="http://www.hp.com/schemas/imaging/con/ledm/productusagedyn/2007/10/31" xmlns:dd="http://www.hp.com/schemas/imaging/con/dictionaries/1.0/">
   <dd:TotalImpressions>12981</dd:TotalImpressions>
   <dd:DuplexSheets>1236</dd:DuplexSheets>
   <dd:JamEvents>0</dd:JamEvents>
-  <dd:MispickEvents>66</dd:MispickEvents>
+  <dd:MispickEvents>${mispicks}</dd:MispickEvents>
   <dd:WirelessNetworkImpressions>8450</dd:WirelessNetworkImpressions>
 </usage:ProductUsageDyn>
 XML

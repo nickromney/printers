@@ -107,3 +107,31 @@ EOF
   assert_output_contains "$monitor" "  hp-job: job-url=/Jobs/JobList/10 category=Print state=Completed update=239-42"
   assert_output_contains "$monitor" "Monitor stopping because no active print job was detected on the first sample."
 }
+
+@test "monitor treats a CUPS queue that is now printing as activity" {
+  set_mock_state job_list_mode empty
+  set_mock_state status_mode ready
+  sed -i.bak 's/^printer \$queue is idle.  enabled since/printer $queue now printing $queue-7.  enabled since/' "${MOCK_BIN}/lpstat"
+
+  run "$SCRIPT_UNDER_TEST" --host 192.0.2.25 --monitor-printing --samples 2 --interval 0
+
+  [ "$status" -eq 0 ]
+  monitor="$(scrub_output "${output#*== During Printing Monitor ==}")"
+  assert_output_contains "$monitor" "now printing"
+  [ "$(sample_lines "$monitor")" -eq 2 ]
+  assert_output_not_contains "$monitor" "Monitor stopping"
+}
+
+@test "monitor treats an IPP processing printer state as activity" {
+  set_mock_state job_list_mode empty
+  set_mock_state status_mode ready
+  set_mock_state ipp_state processing
+
+  run "$SCRIPT_UNDER_TEST" --host 192.0.2.25 --monitor-printing --samples 2 --interval 0
+
+  [ "$status" -eq 0 ]
+  monitor="$(scrub_output "${output#*== During Printing Monitor ==}")"
+  assert_output_contains "$monitor" "ipp-state=processing"
+  [ "$(sample_lines "$monitor")" -eq 2 ]
+  assert_output_not_contains "$monitor" "Monitor stopping"
+}
