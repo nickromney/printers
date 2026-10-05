@@ -127,7 +127,8 @@ setup() {
   run "$LUCKY_UNDER_TEST" --host 192.0.2.25
 
   [ "$status" -eq 0 ]
-  assert_output_contains "$output" "Done. The printer should be ready now."
+  assert_output_contains "$output" "Repair attempted."
+  assert_output_not_contains "$output" "The printer should be ready now."
   [ -f "${MOCK_STATE_DIR}/last_lp_file.ps" ]
 }
 
