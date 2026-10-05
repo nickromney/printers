@@ -108,7 +108,7 @@ main() {
     printf '\n  Found a problem with the printer (%s). Trying to fix it...\n' "$print_engine_health"
     # --plain suppresses technical prose while still running all repair actions.
     "$script_dir/repair.sh" --execute --plain ${host_args[@]+"${host_args[@]}"} >/dev/null 2>&1 || true
-    printf '  Done. The printer should be ready now.\n'
+    printf '  Repair attempted. The test page below will help check whether printing works.\n'
   else
     printf '  Everything looks OK.\n'
   fi
