@@ -105,3 +105,16 @@ If those remain clean while the user still sees long "printing" times, the delay
 - Wireless transport issues
 - A job that takes a long time for the printer to rasterize
 - A firmware problem only hinted at by HP's internal logs
+
+## Workflow and evidence contract
+
+Reviewed 6 October 2026. Commands below select existing verification seams;
+attended hardware and native lifecycle claims retain their own evidence requirements.
+
+| Decision | Owner | Smallest verification | Evidence and effects |
+| --- | --- | --- | --- |
+| Machine diagnosis | hp/diagnostics.sh; hp/lib | bats hp/tests | Mocks/fixtures; --plain key=value facts and unknown endpoint states |
+| Repair selection | hp/repair.sh | Fixture tests; no live --execute | Timestamped current diagnosis before reset/job/ePrint mutation |
+| Physical acceptance | hp/prove-print.sh; hp/lucky.sh | Attended print only | Queue acceptance/device processing are not visually observed page; consumes paper/ink |
+
+Agent evidence ladder: use diagnostics --plain for current machine-readable facts, then retain timestamped raw responses when an endpoint or interpretation is uncertain. Local queue acceptance, device processing state and a physically observed printed page are different claims. repair --execute can reset the device, clear jobs and change ePrint settings. lucky and prove-print send physical print jobs and consume supplies; they are effectful acceptance actions, not routine read-only checks.

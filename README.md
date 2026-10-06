@@ -19,3 +19,7 @@ This repository is an unofficial collection of compatibility tooling. It is not 
 
 - Keep device-specific scripts, docs, and tests under the matching manufacturer directory.
 - Keep raw captures out of git. Any `diagnostics-output/` directory is ignored repository-wide.
+
+## Agent operation and plan status
+
+For the current ownership, action-effect and evidence contracts, use [the operating model](docs/agent-system.md). Its implemented plan covers agent navigation and documentation. Feature proposals below remain proposals until their own acceptance evidence is recorded; dated observations retain their original scope.
