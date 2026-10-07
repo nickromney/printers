@@ -174,7 +174,8 @@
         "Makefile",
         "hp/tests/test_helper.bash",
         "hp/tests/hp-printer-diagnostics.bats",
-        "hp/tests/interpretation.bats"
+        "hp/tests/interpretation.bats",
+        "hp"
       ],
       "requires": [],
       "recovery": "Fix exact command-mode or interpretation regression and rerun all suites."
