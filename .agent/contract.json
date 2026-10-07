@@ -20,7 +20,6 @@
       ],
       "acceptance_scope": "build",
       "inputs": [
-        ".github/dependabot.yml",
         "Makefile",
         "hp/diagnostics.sh",
         "hp/lib/printer-common.sh",
