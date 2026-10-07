@@ -1,0 +1,217 @@
+{
+  "schema_version": 1,
+  "project": "printers",
+  "purpose": "hp/diagnostics.sh sets HP_COMMAND_MODE=diagnose; hp/repair.sh sets repair",
+  "actions": [
+    {
+      "id": "verify",
+      "intent": "Execute every owning local source, domain, compile and quality gate; no live app/device acceptance.",
+      "argv": [
+        "lefthook",
+        "run",
+        "pre-push",
+        "--force"
+      ],
+      "effects": [
+        "read",
+        "local_write",
+        "process",
+        "network"
+      ],
+      "acceptance_scope": "build",
+      "inputs": [
+        ".github/dependabot.yml",
+        "Makefile",
+        "hp/diagnostics.sh",
+        "hp/lib/printer-common.sh",
+        "hp/lib/printer-discovery.sh",
+        "hp/lucky.sh",
+        "hp/prove-print.sh",
+        "hp/repair.sh",
+        "hp/tests/health-state.bats",
+        "hp/tests/hp-printer-diagnostics.bats",
+        "hp/tests/interpretation.bats",
+        "hp/tests/lucky.bats",
+        "hp/tests/monitor.bats",
+        "hp/tests/prose-report.bats",
+        "hp/tests/prove-print.bats",
+        "hp/tests/test_helper.bash",
+        "lefthook.yml",
+        "scripts/agent/check-local.sh",
+        "scripts/check-bash-complexity.sh",
+        "scripts/lib/complexity.sh",
+        "scripts/lib/mutation.sh",
+        "scripts/lib/shell-cli.sh",
+        "scripts/lib/timeout.sh",
+        "scripts/mutation-test.sh"
+      ],
+      "requires": [],
+      "recovery": "Fix the failed owner or missing pinned tool/cache and repeat the complete forced gate; failed/skipped checks are inconclusive."
+    },
+    {
+      "id": "diagnose",
+      "intent": "Read-only device queries and local CUPS reads; --plain stable key=value; repair flags rejected. Read-only still sends device/LAN packets.",
+      "argv": [
+        "./hp/diagnostics.sh",
+        "--host",
+        "{printer_host}",
+        "--plain"
+      ],
+      "effects": [
+        "read",
+        "process",
+        "network"
+      ],
+      "acceptance_scope": "runtime",
+      "inputs": [
+        "hp/diagnostics.sh",
+        "hp/lib/printer-common.sh"
+      ],
+      "requires": [
+        {
+          "kind": "operator",
+          "reason": "Bash + CUPS/curl transport tooling"
+        },
+        {
+          "kind": "operator",
+          "reason": "explicit target printer read authorization"
+        }
+      ],
+      "recovery": "Retain missing endpoint evidence and unavailable queue; verify intended host before retry.",
+      "parameters": {
+        "printer_host": {
+          "pattern": "[^\\x00\\r\\n]+",
+          "description": "Explicit operator-selected input; supplied as one argv value."
+        }
+      }
+    },
+    {
+      "id": "repair-help",
+      "intent": "Help by default. Not an alias for auto repair.",
+      "argv": [
+        "./hp/repair.sh"
+      ],
+      "effects": [
+        "read",
+        "process"
+      ],
+      "acceptance_scope": "runtime",
+      "inputs": [
+        "hp/repair.sh",
+        "hp/lib/printer-common.sh"
+      ],
+      "requires": [
+        {
+          "kind": "operator",
+          "reason": "Bash"
+        }
+      ],
+      "recovery": "Choose explicitly scoped repair only after reviewing help/host; no repair implied by help."
+    },
+    {
+      "id": "repair-device",
+      "intent": "Full repair recipe may soft reset, clear device job list and disable/cancel ePrint connectivity. Saves captures; --fix alias same effect. No action executed in this pass.",
+      "argv": [
+        "./hp/repair.sh",
+        "--execute",
+        "--host",
+        "{printer_host}",
+        "--save-raw",
+        "--output-dir",
+        "{evidence_directory}"
+      ],
+      "effects": [
+        "read",
+        "local_write",
+        "process",
+        "network",
+        "device"
+      ],
+      "acceptance_scope": "device",
+      "inputs": [
+        "hp/repair.sh",
+        "hp/lib/printer-common.sh"
+      ],
+      "requires": [
+        {
+          "kind": "operator",
+          "reason": "explicit mutation authorization"
+        },
+        {
+          "kind": "operator",
+          "reason": "verified target"
+        },
+        {
+          "kind": "operator",
+          "reason": "writable evidence directory and transport tools"
+        }
+      ],
+      "recovery": "Inspect pre/post endpoint/job evidence; stopped partial recipe is not rollback; do not blindly repeat device reset.",
+      "parameters": {
+        "printer_host": {
+          "pattern": "[^\\x00\\r\\n]+",
+          "description": "Explicit operator-selected input; supplied as one argv value."
+        },
+        "evidence_directory": {
+          "pattern": "[^\\x00\\r\\n]+",
+          "description": "Explicit operator-selected input; supplied as one argv value."
+        }
+      }
+    },
+    {
+      "id": "verify-domain",
+      "intent": "Exact tests diagnostics rejects repair actions after the split; repair help is the default; repair execute and fix aliases run the full repair recipe; spool note needs processing jobs on both IPP and the HP job list. Mock transports, no live printer.",
+      "argv": [
+        "make",
+        "test-domain"
+      ],
+      "effects": [
+        "read",
+        "local_write",
+        "process"
+      ],
+      "acceptance_scope": "fixture",
+      "inputs": [
+        "Makefile",
+        "hp/tests/test_helper.bash",
+        "hp/tests/hp-printer-diagnostics.bats",
+        "hp/tests/interpretation.bats"
+      ],
+      "requires": [],
+      "recovery": "Fix exact command-mode or interpretation regression and rerun all suites."
+    }
+  ],
+  "learning": [
+    {
+      "id": "owner-invariant-1",
+      "summary": "Printer observations must cross-check IPP and HP job list before diagnosing spool pressure; diagnostics cannot accept repair flags, while repair requires explicit --execute/--fix.",
+      "when": [
+        "When changing transport interpretation, script dispatch or repair grammar."
+      ],
+      "owner": "hp/lib/printer-common.sh",
+      "basis": [
+        {
+          "path": "hp/lib/printer-common.sh",
+          "sha256": "51e6046a24da606738a32771a1d4e1e917b98f13714e566556d7e9019e12f732"
+        },
+        {
+          "path": "hp/diagnostics.sh",
+          "sha256": "8b2547d2d32a58f1292e7ef28fa29b6e2430e27375e5a451020a5b94e261b6f4"
+        },
+        {
+          "path": "hp/repair.sh",
+          "sha256": "86d2ce0416e9f268f3146f9ce9ae957f584f23d9bd25d675dfb3a4ee18060d87"
+        },
+        {
+          "path": "hp/tests/interpretation.bats",
+          "sha256": "4223e25ca78569aada13d3670c93b96b221bddc3ee2831295575fd6cdf568a0d"
+        },
+        {
+          "path": "hp/tests/hp-printer-diagnostics.bats",
+          "sha256": "9cf4035396787084b512d66e278c9b6052082e3698a206871fc507c1e6a847da"
+        }
+      ],
+      "verify_action": "verify-domain"
+    }
+  ]
+}
