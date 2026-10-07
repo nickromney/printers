@@ -109,6 +109,8 @@ main() {
     # --plain suppresses technical prose while still running all repair actions.
     "$script_dir/repair.sh" --execute --plain ${host_args[@]+"${host_args[@]}"} >/dev/null 2>&1 || true
     printf '  Repair attempted. The test page below will help check whether printing works.\n'
+  elif [ "$print_engine_health" = "unknown" ]; then
+    printf '  Printer status could not be read. The test page below checks printing.\n'
   else
     printf '  Everything looks OK.\n'
   fi

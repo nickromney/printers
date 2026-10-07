@@ -65,6 +65,25 @@ setup() {
 
 # ---- cloud_health ----
 
+@test "unavailable device status is unknown rather than a healthy engine" {
+  for tool in curl ipptool snmpget snmpwalk; do
+    cat > "${MOCK_BIN}/$tool" <<'EOF'
+#!/usr/bin/env bash
+echo "fixture transport unavailable" >&2
+exit 7
+EOF
+    chmod +x "${MOCK_BIN}/$tool"
+  done
+
+  run "$SCRIPT_UNDER_TEST" --host 192.0.2.25 --plain
+
+  [ "$status" -eq 0 ]
+  assert_output_contains "$output" "print_engine_health=unknown"
+  assert_output_contains "$output" "status_category=unknown"
+  assert_output_contains "$output" "cloud_health=unknown"
+  assert_output_contains "$output" "mac_queue_health=healthy"
+}
+
 @test "cloud_health is disabled when all ePrint services are off and unregistered" {
   printf 'disabled\n' > "${MOCK_STATE_DIR}/eprint_mode"
   printf 'ready\n'    > "${MOCK_STATE_DIR}/status_mode"

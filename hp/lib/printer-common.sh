@@ -986,6 +986,9 @@ classify_print_engine_health() {
   elif [ -n "$PRODUCT_ERROR_LOG" ]; then
     PRINT_ENGINE_HEALTH="degraded"
     PRINT_ENGINE_DETAIL="hidden HP error log is non-empty"
+  elif [ -z "$STATUS_CATEGORY" ] && [ -z "${IPP_STATE:-}" ]; then
+    PRINT_ENGINE_HEALTH="unknown"
+    PRINT_ENGINE_DETAIL="printer status could not be observed"
   else
     PRINT_ENGINE_HEALTH="healthy"
     PRINT_ENGINE_DETAIL="printer reports ready/idle"

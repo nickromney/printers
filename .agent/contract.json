@@ -192,7 +192,7 @@
       "basis": [
         {
           "path": "hp/lib/printer-common.sh",
-          "sha256": "51e6046a24da606738a32771a1d4e1e917b98f13714e566556d7e9019e12f732"
+          "sha256": "d22523b7a7a7968730eb5af57c1e9ad9a3e7ab734ae2de5277f3626539898f97"
         },
         {
           "path": "hp/diagnostics.sh",
