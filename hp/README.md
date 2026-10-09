@@ -58,6 +58,10 @@ chmod +x ./hp/repair.sh
 
 `diagnostics.sh` is read-only. `repair.sh` prints help by default and only performs mutation when you opt into `--execute` or `--fix`.
 
+An idle local queue does not establish printer readiness. If neither HP nor IPP
+status can be observed, the plain summary reports `print_engine_health=unknown`;
+queue and cloud health retain their separate evidence.
+
 Use `--plain` on either wrapper when you need a stable `key=value` summary for scripts or fixtures instead of the full prose report. The repair script keeps the full repair steps behind the recipe so the public surface stays simple.
 
 When `--save-raw` is enabled, the script writes the unmodified responses to a timestamped directory so you can inspect the raw IPP, XML, and SNMP output later.

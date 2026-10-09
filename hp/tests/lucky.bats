@@ -90,6 +90,25 @@ setup() {
   assert_file_not_exists "${MOCK_STATE_DIR}/last_nc_args.txt"
 }
 
+@test "lucky distinguishes unavailable printer status from healthy and does not repair" {
+  for tool in curl ipptool snmpget snmpwalk; do
+    cat > "${MOCK_BIN}/$tool" <<'EOF'
+#!/usr/bin/env bash
+echo "fixture transport unavailable" >&2
+exit 7
+EOF
+    chmod +x "${MOCK_BIN}/$tool"
+  done
+
+  run "$LUCKY_UNDER_TEST" --host 192.0.2.25
+
+  [ "$status" -eq 0 ]
+  assert_output_contains "$output" "Printer status could not be read."
+  assert_output_not_contains "$output" "Everything looks OK."
+  assert_file_not_exists "${MOCK_STATE_DIR}/last_nc_args.txt"
+  [ -f "${MOCK_STATE_DIR}/last_lp_file.ps" ]
+}
+
 @test "lucky reports the resolved network address and pins later calls to it" {
   printf 'processing\n' > "${MOCK_STATE_DIR}/job_list_mode"
 

@@ -29,3 +29,14 @@ mutation:
 mutation-execute:
 	@[ -n "$(SCRIPT)" ] || { echo "SCRIPT is required, e.g. make mutation-execute SCRIPT=hp/lib/printer-common.sh"; exit 1; }
 	@MUTATION_BATS_FLAGS="$${MUTATION_BATS_FLAGS:---jobs 4}" scripts/mutation-test.sh --script "$(SCRIPT)" $(MUTATION_BATS) --timeout 180 $(MUTATION_ARGS) --execute
+
+# Local acceptance uses fixtures and builds; never launches the host app.
+.PHONY: test-core test-domain check-local
+test-core:
+	bats --jobs 8 hp/tests
+
+test-domain:
+	'bats' 'hp/tests/hp-printer-diagnostics.bats' 'hp/tests/interpretation.bats'
+
+check-local:
+	./scripts/agent/check-local.sh
