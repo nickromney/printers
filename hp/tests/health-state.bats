@@ -84,6 +84,21 @@ EOF
   assert_output_contains "$output" "mac_queue_health=healthy"
 }
 
+@test "print_engine_health falls back to reachable IPP status when HP status is unavailable" {
+  cat > "${MOCK_BIN}/curl" <<'EOF'
+#!/usr/bin/env bash
+echo "fixture transport unavailable" >&2
+exit 7
+EOF
+  chmod +x "${MOCK_BIN}/curl"
+
+  run "$SCRIPT_UNDER_TEST" --host 192.0.2.25 --plain
+
+  [ "$status" -eq 0 ]
+  assert_output_contains "$output" "print_engine_health=healthy"
+  assert_output_contains "$output" "status_category=unknown"
+}
+
 @test "cloud_health is disabled when all ePrint services are off and unregistered" {
   printf 'disabled\n' > "${MOCK_STATE_DIR}/eprint_mode"
   printf 'ready\n'    > "${MOCK_STATE_DIR}/status_mode"

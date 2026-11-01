@@ -1116,7 +1116,7 @@ run_plain_report() {
   IPP_STATE_REASONS=""
   clear_endpoint_variables "$HP_REPORT_ENDPOINTS"
   collect_hp_state "$HP_PLAIN_ENDPOINTS"
-  collect_ipp_jobs
+  collect_ipp_state
   classify_health
   emit_plain_summary
 }
